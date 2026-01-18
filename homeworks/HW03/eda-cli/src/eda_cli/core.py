@@ -170,7 +170,7 @@ def top_categories(
     return result
 
 
-def compute_quality_flags(summary: DatasetSummary, missing_df: pd.DataFrame) -> Dict[str, Any]:
+def compute_quality_flags(summary: DatasetSummary, missing_df: pd.DataFrame, df: pd.DataFrame) -> Dict[str, Any]:
     """
     Простейшие эвристики «качества» данных:
     - слишком много пропусков;
@@ -184,6 +184,25 @@ def compute_quality_flags(summary: DatasetSummary, missing_df: pd.DataFrame) -> 
     max_missing_share = float(missing_df["missing_share"].max()) if not missing_df.empty else 0.0
     flags["max_missing_share"] = max_missing_share
     flags["too_many_missing"] = max_missing_share > 0.5
+
+    # Новые эвристики
+    # Колонки с большим количеством нулей
+    many_zero_columns = []
+    zero_threshold = 0.3  # 30% нулей считается много
+    for col_name in df.select_dtypes(include='number').columns:
+        zero_share = (df[col_name] == 0).mean()
+        if zero_share > zero_threshold:
+            many_zero_columns.append((col_name, zero_share))
+    flags["has_many_zero_values"] = len(many_zero_columns) > 0
+    flags["many_zero_columns"] = many_zero_columns
+
+    # Колонки, где все значения одинаковые
+    constant_columns = []
+    for col in summary.columns:
+        if col.unique == 1 and col.non_null > 0:
+            constant_columns.append(col.name)
+    flags["has_constant_columns"] = len(constant_columns) > 0
+    flags["constant_columns"] = constant_columns
 
     # Простейший «скор» качества
     score = 1.0
